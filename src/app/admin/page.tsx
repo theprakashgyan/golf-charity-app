@@ -8,14 +8,16 @@ export default function AdminDashboard() {
     const [loading, setLoading] = useState(true)
     const [isDrawing, setIsDrawing] = useState(false)
     const [lastDraw, setLastDraw] = useState<number[]>([])
+
+    // NEW: State to hold our winners
+    const [winners, setWinners] = useState({ match5: [], match4: [], match3: [] })
+
     const router = useRouter()
 
     useEffect(() => {
         const checkAdminStatus = async () => {
             const { data: { user } } = await supabase.auth.getUser()
-
-            // IMPORTANT: Change this to your actual login email!
-            if (!user || user.email !== 'your-email@example.com') {
+            if (!user || user.email !== 'your-email@example.com') { // Keep your actual email here!
                 router.push('/dashboard')
                 return
             }
@@ -25,32 +27,62 @@ export default function AdminDashboard() {
         checkAdminStatus()
     }, [router])
 
-    // --- THE DRAW ENGINE ALGORITHM ---
     const executeDrawSimulation = async () => {
         setIsDrawing(true)
+        setWinners({ match5: [], match4: [], match3: [] }) // Reset winners
 
-        // 1. Generate 5 unique random numbers between 1 and 45
+        // 1. Generate 5 unique random numbers
         const drawnNumbers = new Set<number>()
         while (drawnNumbers.size < 5) {
             drawnNumbers.add(Math.floor(Math.random() * 45) + 1)
         }
-
-        // Convert Set to Array and sort them for easy reading
         const winningNumbers = Array.from(drawnNumbers).sort((a, b) => a - b)
 
-        // 2. Save the simulation to the database
+        // 2. Save the simulation
         const { error } = await supabase
             .from('draws')
-            .insert([{
-                winning_numbers: winningNumbers,
-                status: 'simulation'
-            }])
+            .insert([{ winning_numbers: winningNumbers, status: 'simulation' }])
 
         if (error) {
             console.error("Draw failed:", error)
             alert("Failed to run the draw. Check console.")
-        } else {
-            setLastDraw(winningNumbers)
+            setIsDrawing(false)
+            return
+        }
+
+        setLastDraw(winningNumbers)
+
+        // --- THE MATCHING ALGORITHM ---
+
+        // 3. Fetch ALL scores from the database
+        const { data: allScores } = await supabase.from('scores').select('user_id, score')
+
+        if (allScores) {
+            // Group scores by user
+            const userScores: Record<string, number[]> = {}
+            allScores.forEach(row => {
+                if (!userScores[row.user_id]) userScores[row.user_id] = []
+                userScores[row.user_id].push(row.score)
+            })
+
+            // 4. Count matches for each user
+            const currentWinners: any = { match5: [], match4: [], match3: [] }
+
+            Object.keys(userScores).forEach(userId => {
+                const userNums = userScores[userId]
+                let matchCount = 0
+
+                userNums.forEach(num => {
+                    if (winningNumbers.includes(num)) matchCount++
+                })
+
+                // 5. Sort them into the prize tiers
+                if (matchCount === 5) currentWinners.match5.push(userId)
+                if (matchCount === 4) currentWinners.match4.push(userId)
+                if (matchCount === 3) currentWinners.match3.push(userId)
+            })
+
+            setWinners(currentWinners)
         }
 
         setIsDrawing(false)
@@ -91,23 +123,34 @@ export default function AdminDashboard() {
                             disabled={isDrawing}
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded transition-colors disabled:opacity-50"
                         >
-                            {isDrawing ? 'Calculating...' : 'Execute Draw Simulation'}
+                            {isDrawing ? 'Calculating Matches...' : 'Execute Draw Simulation'}
                         </button>
                     </div>
 
-                    {/* System Metrics */}
-                    <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800">
-                        <h2 className="text-xl font-bold mb-4">System Metrics</h2>
-                        <ul className="space-y-4">
-                            <li className="flex justify-between border-b border-zinc-800 pb-2">
-                                <span className="text-zinc-400">Total Active Subscriptions</span>
-                                <span className="font-bold">--</span>
-                            </li>
-                            <li className="flex justify-between border-b border-zinc-800 pb-2">
-                                <span className="text-zinc-400">Current Prize Pool</span>
-                                <span className="font-bold text-green-400">$ --</span>
-                            </li>
-                        </ul>
+                    {/* NEW: Winner Results Display */}
+                    <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-800 flex flex-col">
+                        <h2 className="text-xl font-bold mb-4">Simulation Winners</h2>
+
+                        {lastDraw.length === 0 ? (
+                            <p className="text-zinc-500 flex-grow flex items-center justify-center italic">Run a draw to see winners.</p>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-black p-3 rounded border border-zinc-800 flex justify-between items-center">
+                                    <span className="font-bold text-yellow-400">5-Number Match (Jackpot)</span>
+                                    <span className="bg-yellow-400/20 text-yellow-400 px-3 py-1 rounded-full text-sm">{winners.match5.length} Winners</span>
+                                </div>
+
+                                <div className="bg-black p-3 rounded border border-zinc-800 flex justify-between items-center">
+                                    <span className="font-bold text-zinc-200">4-Number Match</span>
+                                    <span className="bg-zinc-700 text-white px-3 py-1 rounded-full text-sm">{winners.match4.length} Winners</span>
+                                </div>
+
+                                <div className="bg-black p-3 rounded border border-zinc-800 flex justify-between items-center">
+                                    <span className="font-bold text-orange-400">3-Number Match</span>
+                                    <span className="bg-orange-400/20 text-orange-400 px-3 py-1 rounded-full text-sm">{winners.match3.length} Winners</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                 </div>
