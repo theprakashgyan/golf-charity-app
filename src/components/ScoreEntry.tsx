@@ -9,20 +9,25 @@ export default function ScoreEntry({ userId }: { userId: string }) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
-        // 1. Validation: Score must be 1-45 [cite: 45]
         const scoreVal = parseInt(score)
         if (scoreVal < 1 || scoreVal > 45) {
             alert("Score must be between 1 and 45")
             return
         }
 
-        // 2. Insert the new score [cite: 46]
         const { error } = await supabase
             .from('scores')
             .insert([{ user_id: userId, score: scoreVal, date_played: date }])
 
-        if (error) console.error(error)
-        else alert("Score added!")
+        if (error) {
+            console.error(error)
+            // THIS is the new line. It will pop up the exact database error!
+            alert("Database Error: " + error.message)
+        } else {
+            alert("Score added!")
+            // Refresh the page to show the new score instantly
+            window.location.reload()
+        }
     }
 
     return (
