@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabaseClient'
 import ScoreEntry from '../../components/ScoreEntry'
+import Link from 'next/link'
 
 export default function UserDashboard() {
     const [scores, setScores] = useState<any[]>([])
@@ -83,9 +84,9 @@ export default function UserDashboard() {
                             {profile?.subscription_status || 'Inactive'}
                         </p>
                         {profile?.subscription_status !== 'active' && (
-                            <button className="text-sm bg-blue-600 px-4 py-1 rounded-full hover:bg-blue-700 transition-colors">
+                            <Link href="/pricing" className="inline-block text-sm bg-blue-600 px-4 py-1 rounded-full hover:bg-blue-700 transition-colors">
                                 Activate Plan
-                            </button>
+                            </Link>
                         )}
                     </div>
 
